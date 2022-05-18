@@ -18,50 +18,81 @@
 
 package mylib
 
+
 import spinal.core._
 import spinal.lib._
 
+import scala.collection.mutable.HashMap
+import scala.collection.mutable.ListBuffer
 import scala.util.Random
 
-//Hardware definition
-class MyTopLevel extends Component {
-  val io = new Bundle {
-    val cond0 = in  Bool()
-    val cond1 = in  Bool()
-    val flag  = out Bool()
-    val state = out UInt(8 bits)
-  }
-  val counter = Reg(UInt(8 bits)) init(0)
+// Code Style
+// Class Name : Pascal(Upper Camel)
+// Method/Attribute : Camel
+// Local variable : Under Score
 
-  when(io.cond0){
-    counter := counter + 1
+object InstructionOPCode extends SpinalEnum{
+  val NOP,SLL,ADD = newElement()
+}
+
+class CPUPlugin(cpu:CPU){
+  class InstBundle(inst:MaskedLiteral,opcode:InstructionOPCode.C,decode_action: => Unit,execute_action: => Unit){
+    def decode=decode_action
+    def execute=execute_action
+  }
+  def decodeActionWith_RD_RS1_RS2(opcode:InstructionOPCode.C): Unit ={
+    import cpu.ID._
+    output(OPCODE) := opcode.asBits.resized
+    output(SRC1) := cpu.regfile.read(input(INST)(19 downto 15).asUInt)
+    output(SRC2) := cpu.regfile.read(input(INST)(24 downto 20).asUInt)
+    output(DEST) := input(INST)(11 downto 7)
   }
 
-  io.state := counter
-  io.flag  := (counter === 0) | io.cond1
+  def executeActionWriteRD(block_get_result:(Bits,Bits) => Bits)={
+    import cpu.EX._
+    cpu.regfile.write(input(DEST).asUInt, block_get_result(input(SRC1),input(SRC2)))
+  }
+}
+
+class Shifter(cpu:CPU) extends CPUPlugin(cpu){
+  val a = new InstBundle(
+    inst=Instructions.SLL,
+    opcode=InstructionOPCode.SLL,
+    decode_action = decodeActionWith_RD_RS1_RS2(InstructionOPCode.SLL),
+    execute_action = executeActionWriteRD((a,b)=> a |<< b.asUInt)
+  )
+  val insts=List(a
+  )
+
+  def build(cpu:CPU): Unit ={
+    cpu.ID.plug(new Area{
+      import cpu.ID._
+      when(input(INST)===Instructions.SLL){
+        a.decode
+      }
+    })
+
+    cpu.EX.plug(new Area{
+      import cpu.EX._
+      when(input(OPCODE)===InstructionOPCode.SLL.asBits.resized){
+        a.execute
+      }
+    })
+  }
+}
+
+class SOC extends Component{
+  val rom = new ROM
+  val cpu = new CPU
+
+  rom.io <> cpu.io.rom_interface
+
+  rom.init(List("sll x3,x2,x1","add x2,x1,x0","sll x3,x2,x1"))
 }
 
 //Generate the MyTopLevel's Verilog
 object MyTopLevelVerilog {
   def main(args: Array[String]) {
-    SpinalVerilog(new MyTopLevel)
-  }
-}
-
-//Generate the MyTopLevel's VHDL
-object MyTopLevelVhdl {
-  def main(args: Array[String]) {
-    SpinalVhdl(new MyTopLevel)
-  }
-}
-
-
-//Define a custom SpinalHDL configuration with synchronous reset instead of the default asynchronous one. This configuration can be resued everywhere
-object MySpinalConfig extends SpinalConfig(defaultConfigForClockDomains = ClockDomainConfig(resetKind = SYNC))
-
-//Generate the MyTopLevel's Verilog using the above custom configuration.
-object MyTopLevelVerilogWithCustomConfig {
-  def main(args: Array[String]) {
-    MySpinalConfig.generateVerilog(new MyTopLevel)
+    SpinalVerilog(new SOC).printPruned()
   }
 }

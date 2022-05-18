@@ -32,7 +32,8 @@ import scala.util.Random
 // Local variable : Under Score
 
 object InstructionOPCode extends SpinalEnum{
-  val NOP,SLL,ADD = newElement()
+  val NOP,SLL,SRL,ADD,SLT,AND,OR,XOR,SUB,SRA = newElement()
+  val ADDI=newElement()
 }
 
 class InstBundle(val inst:MaskedLiteral,val opcode:InstructionOPCode.C,decode_action: => Unit,execute_action: => Unit){
@@ -71,7 +72,8 @@ class CPUPlugin(cpu:CPU){
   def decodeActionWith_RD_RS1_IMM12(opcode:InstructionOPCode.C): Unit ={
     import cpu.ID._
     decodeActionWith_RD_RS1(opcode)
-    output(SRC2_VAL) := input(INST)(IMM12.range)
+    output(SRC2_VAL) := input(INST)(IMM12.range).asSInt.resize(SRC2_VAL.getBitsWidth).asBits
+    // let 's use sign expand here
   }
 
   def executeActionWriteRD(block_get_result:(Bits,Bits) => Bits)={
@@ -94,7 +96,13 @@ class Shifter(cpu:CPU) extends CPUPlugin(cpu){
     decode_action = decodeActionWith_RD_RS1_RS2(InstructionOPCode.ADD),
     execute_action = executeActionWriteRD((src1,src2)=> (src1.asUInt + src2.asUInt).asBits)
   )
-  val insts=List(SLL,ADD)
+  val ADDI = new InstBundle(
+    inst=Instructions.ADDI,
+    opcode=InstructionOPCode.ADDI,
+    decode_action = decodeActionWith_RD_RS1_IMM12(InstructionOPCode.ADDI),
+    execute_action = executeActionWriteRD((src1,src2)=> (src1.asSInt + src2.asSInt).asBits)
+  )
+  val insts=List(SLL,ADD,ADDI)
 
   def build(cpu:CPU): Unit ={
     for(i<- insts){

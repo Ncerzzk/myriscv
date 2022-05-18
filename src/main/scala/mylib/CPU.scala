@@ -65,6 +65,4 @@ class CPU extends Component{
   ID.build()
   IF.build()
 
-
-
 }

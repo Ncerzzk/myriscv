@@ -114,7 +114,7 @@ class InstTemplate(template:String){
   //val pattern="(\\w+)\\s+(\\w+)\\s*(?:,\\s*(\\w+)\\s*)*".r()
   val pattern=(
     "(\\w+)\\s+(\\w+)\\s*" +
-    ",\\s*(\\w+)\\s*".repeat(template.count(_==','))
+    ",\\s*([\\w-]+)\\s*".repeat(template.count(_==','))
     ).r()
   val list=pattern.findFirstMatchIn(template) match {
     case Some(x) => x.subgroups
@@ -147,6 +147,10 @@ object CompileInstructions{
 
   for (i <- instsWith2RSList){
     insts += i->instsWith2RS(i)
+  }
+
+  for (i <- instsWithIMM12List){
+    insts += i->instsWithIMM12(i)
   }
 
   def replaceFun(string: String, startIndex: Int, endIndex: Int, replacement:String) = {
@@ -191,7 +195,13 @@ object CompileInstructions{
       val arg_name=inst_template.list(i)
       val arg_range=args_range(arg_name)
       var arg_val= parseStr2Int(inst_list(i)).toBinaryString
-      arg_val = "0".repeat(arg_range.length-arg_val.length)+arg_val
+      if(arg_val.length>arg_range.length){
+        // when the val <0
+        arg_val=arg_val.substring(arg_val.length-arg_range.length)
+      }else{
+        arg_val = "0".repeat(arg_range.length-arg_val.length)+arg_val
+      }
+
       inst_markstr=replaceFun(inst_markstr,32-arg_range.end-1,32-arg_range.start-1,arg_val)
     }
     inst_markstr

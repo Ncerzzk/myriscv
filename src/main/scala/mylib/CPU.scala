@@ -2,6 +2,8 @@ package mylib
 
 import spinal.core._
 
+import scala.collection.mutable.{ListBuffer,HashMap}
+
 class RegFile extends Area{
   val regs=Mem(Bits(Config.XLEN),32).init(Array.fill(32)(B(0)))
   def read(reg_addr:UInt)=regs.readAsync(reg_addr,writeFirst)
@@ -33,7 +35,24 @@ class CPU extends Component{
   val IF = new Stage{
     input(INST) := io.rom_interface.data
   }
-  val ID = new Stage
+  val ID = new Stage{
+    val careList = HashMap[BigInt,ListBuffer[InstBundle]]()
+    def addDecode(inst_bundle:InstBundle)={
+      careList.getOrElseUpdate(inst_bundle.careAbout,ListBuffer[InstBundle]()) += inst_bundle
+    }
+
+    override def build(): Unit = {
+      for(i <- careList){
+        val care_bits = input(INST)&i._1
+        for(j <- i._2){
+          when(care_bits === j.value){
+            j.decode
+          }
+        }
+      }
+      super.build()
+    }
+  }
   val EX = new Stage
   val WB = new Stage
 
@@ -42,8 +61,10 @@ class CPU extends Component{
   val a=new Shifter(this)
   a.build(this)
 
-  IF.build()
+  // the call order of .build() matters.
   ID.build()
+  IF.build()
+
 
 
 }

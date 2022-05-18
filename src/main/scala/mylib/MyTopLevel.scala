@@ -35,31 +35,49 @@ object InstructionOPCode extends SpinalEnum{
   val NOP,SLL,ADD = newElement()
 }
 
-class CPUPlugin(cpu:CPU){
-  class InstBundle(inst:MaskedLiteral,opcode:InstructionOPCode.C,decode_action: => Unit,execute_action: => Unit){
-    def decode=decode_action
-    def execute=execute_action
-  }
+class InstBundle(val inst:MaskedLiteral,val opcode:InstructionOPCode.C,decode_action: => Unit,execute_action: => Unit){
+  // this class is used for compack inst with its opcode and actions together
+  def decode=decode_action
+  def execute=execute_action
 
-  def decodeActionWith_RD_RS1_RS2(opcode:InstructionOPCode.C): Unit ={
+  val careAbout=inst.careAbout
+  val value=inst.value
+}
+
+class CPUPlugin(cpu:CPU){
+  def decodeActionWith_RD_RS1(opcode:InstructionOPCode.C):Unit={
     import cpu.ID._
     output(OPCODE) := opcode.asBits.resized
-    output(SRC1) := cpu.regfile.read(input(INST)(19 downto 15).asUInt)
-    output(SRC2) := cpu.regfile.read(input(INST)(24 downto 20).asUInt)
-    output(DEST) := input(INST)(11 downto 7)
+
+    insert(SRC1) :=  input(INST)(SRC1.range)
+    output(SRC1_VAL) := Mux(cpu.EX.input(DEST)===insert(SRC1),
+      whenTrue=cpu.EX.insert(REG_OUT),
+      whenFalse=cpu.regfile.read(insert(SRC1).asUInt)
+    )
+    output(DEST) := input(INST)(DEST.range)
+  }
+  def decodeActionWith_RD_RS1_RS2(opcode:InstructionOPCode.C): Unit ={
+    import cpu.ID._
+
+    decodeActionWith_RD_RS1(opcode)
+    insert(SRC2) :=  input(INST)(SRC2.range)
+    output(SRC2_VAL) := Mux(cpu.EX.input(DEST)===insert(SRC2),
+      whenTrue=cpu.EX.insert(REG_OUT),
+      whenFalse=cpu.regfile.read(insert(SRC2).asUInt)
+    )
+
   }
 
   def decodeActionWith_RD_RS1_IMM12(opcode:InstructionOPCode.C): Unit ={
     import cpu.ID._
-    output(OPCODE) := opcode.asBits.resized
-    output(SRC1) := cpu.regfile.read(input(INST)(SRC1.range).asUInt)
-    output(SRC2) := input(INST)(IMM12.range)
-    output(DEST) := input(INST)(DEST.range)
+    decodeActionWith_RD_RS1(opcode)
+    output(SRC2_VAL) := input(INST)(IMM12.range)
   }
 
   def executeActionWriteRD(block_get_result:(Bits,Bits) => Bits)={
     import cpu.EX._
-    cpu.regfile.write(input(DEST).asUInt, block_get_result(input(SRC1),input(SRC2)))
+    insert(REG_OUT) := block_get_result(input(SRC1_VAL),input(SRC2_VAL))
+    cpu.regfile.write(input(DEST).asUInt,insert(REG_OUT))
   }
 }
 
@@ -70,23 +88,25 @@ class Shifter(cpu:CPU) extends CPUPlugin(cpu){
     decode_action = decodeActionWith_RD_RS1_RS2(InstructionOPCode.SLL),
     execute_action = executeActionWriteRD((src1,src2)=> src1 |<< src2.asUInt)
   )
-  val insts=List(SLL
+  val ADD = new InstBundle(
+    inst=Instructions.ADD,
+    opcode=InstructionOPCode.ADD,
+    decode_action = decodeActionWith_RD_RS1_RS2(InstructionOPCode.ADD),
+    execute_action = executeActionWriteRD((src1,src2)=> (src1.asUInt + src2.asUInt).asBits)
   )
+  val insts=List(SLL,ADD)
 
   def build(cpu:CPU): Unit ={
-    cpu.ID.plug(new Area{
-      import cpu.ID._
-      when(input(INST)===Instructions.SLL){
-        SLL.decode
-      }
-    })
+    for(i<- insts){
+      cpu.ID.addDecode(i)
 
-    cpu.EX.plug(new Area{
-      import cpu.EX._
-      when(input(OPCODE)===InstructionOPCode.SLL.asBits.resized){
-        SLL.execute
-      }
-    })
+      cpu.EX.plug(new Area{
+        import cpu.EX._
+        when(input(OPCODE)===i.opcode.asBits.resized){
+          i.execute
+        }
+      })
+    }
   }
 }
 

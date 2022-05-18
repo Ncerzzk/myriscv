@@ -14,26 +14,40 @@ class Stageble[T <: Data](_dataType : => T) extends HardType[T](_dataType) {
 
 // TODO
 // edit thess below, to generate the objects by factory methods
-object SRC1 extends Stageble(Bits(32 bits)){
+object SRC1_VAL extends Stageble(Bits(Config.XLEN))
+object SRC2_VAL extends Stageble(Bits(Config.XLEN))
+
+object SRC1 extends Stageble(Bits(5 bits)){
   def range = 19 downto 15
 }
-object SRC2 extends Stageble(Bits(32 bits)){
+object SRC2 extends Stageble(Bits(5 bits)){
   def range = 24 downto 20
 }
+
 object DEST extends Stageble(Bits(5 bits)){
   def range = 11 downto 7
 }
+
 object IMM12 extends Stageble(Bits(12 bits)){
   def range = 31 downto 20
 }
+object REG_OUT extends Stageble(Bits(Config.XLEN))
 
 object INST extends Stageble(Bits(32 bits))
 object OPCODE extends Stageble(Bits(6 bits))
 
 
 class Stage extends Area{
+  /*
+    differences between Inputs/Outputs/Inserts
+    Outputs and Inputs would flow between stages, and there would be regs generated between output and next stages input
+    while Inserts are just variables used by stages
+   */
   var Inputs=new HashMap[Stageble[Data],Data]()
   var Outputs=new HashMap[Stageble[Data],Data]()
+  var Inserts=new HashMap[Stageble[Data],Data]()
+
+
   var OutputRegs=new HashMap[Stageble[Data],Data]()
 
   var NextStages= new ListBuffer[Stage]()
@@ -56,6 +70,14 @@ class Stage extends Area{
       //input:=key.defaultVal // we should connect the input to some signals in other places
       // we should set default value, or we will get a latch error
       input.setPartialName(this, key.name)
+    }).asInstanceOf[T]
+  }
+
+  def insert[T <: Data](key:Stageble[T]):T={
+    Inserts.getOrElseUpdate(key.asInstanceOf[Stageble[Data]],outsideCondScope{
+      val insert = key()
+      insert := key.defaultVal
+      insert.setPartialName(this, key.name)
     }).asInstanceOf[T]
   }
 

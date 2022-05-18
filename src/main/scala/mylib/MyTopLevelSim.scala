@@ -12,7 +12,14 @@ object MySpinalConfig extends SpinalConfig(defaultConfigForClockDomains = ClockD
 
 object MyTopLevelSim {
   def main(args: Array[String]) {
-    SimConfig.withWave.withConfig(MySpinalConfig).doSim(new SOC ){dut =>
+    val compile=SimConfig.withWave.withConfig(MySpinalConfig).withVerilator.compile {
+      SOC(
+        List("sll x3,x2,x1","add x2,x1,x0","sll x3,x2,x1"),
+        List(0,1,2,3,4,5)
+      )
+    }
+    compile.doSim("hello"){dut =>
+
       //Fork a process to generate the reset and the clock on the dut
       dut.clockDomain.forkStimulus(period = 2)
       fork{

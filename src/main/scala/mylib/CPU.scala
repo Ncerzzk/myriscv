@@ -6,6 +6,12 @@ class RegFile extends Area{
   val regs=Mem(Bits(Config.XLEN),32).init(Array.fill(32)(B(0)))
   def read(reg_addr:UInt)=regs.readAsync(reg_addr,writeFirst)
   def write(reg_addr:UInt,data:Bits)=regs.write(reg_addr,data)
+
+  def init(initData:Seq[Int]):Unit={
+    assert (initData.length < 32, "error")
+    val empty_array = Array.fill(32-initData.length)(B(0))
+    regs.init(initData.map(x=>B(x)).toList++empty_array)
+  }
 }
 
 class CPU extends Component{
@@ -38,5 +44,6 @@ class CPU extends Component{
 
   IF.build()
   ID.build()
+
 
 }

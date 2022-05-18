@@ -12,6 +12,8 @@ class Stageble[T <: Data](_dataType : => T) extends HardType[T](_dataType) {
   }
 }
 
+// TODO
+// edit thess below, to generate the objects by factory methods
 object SRC1 extends Stageble(Bits(32 bits)){
   def range = 19 downto 15
 }
@@ -21,6 +23,10 @@ object SRC2 extends Stageble(Bits(32 bits)){
 object DEST extends Stageble(Bits(5 bits)){
   def range = 11 downto 7
 }
+object IMM12 extends Stageble(Bits(12 bits)){
+  def range = 31 downto 20
+}
+
 object INST extends Stageble(Bits(32 bits))
 object OPCODE extends Stageble(Bits(6 bits))
 

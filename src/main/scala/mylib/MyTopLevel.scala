@@ -34,6 +34,7 @@ import scala.util.Random
 object InstructionOPCode extends SpinalEnum{
   val NOP,SLL,SRL,ADD,SLT,AND,OR,XOR,SUB,SRA = newElement()
   val ADDI=newElement()
+  val JALR=newElement()
 }
 
 class InstBundle(val inst:MaskedLiteral,val opcode:InstructionOPCode.C,decode_action: => Unit,execute_action: => Unit){
@@ -50,22 +51,24 @@ class CPUPlugin(cpu:CPU){
     import cpu.ID._
     output(OPCODE) := opcode.asBits.resized
 
-    insert(SRC1) :=  input(INST)(SRC1.range)
-    output(SRC1_VAL) := Mux(cpu.EX.input(DEST)===insert(SRC1),
-      whenTrue=cpu.EX.insert(REG_OUT),
-      whenFalse=cpu.regfile.read(insert(SRC1).asUInt)
-    )
+//    insert(SRC1) :=  input(INST)(SRC1.range)
+//    output(SRC1_VAL) := Mux(cpu.EX.input(DEST)===insert(SRC1),
+//      whenTrue=cpu.EX.output(REG_OUT),
+//      whenFalse=cpu.regfile.read(insert(SRC1).asUInt)
+//    )
+    output(SRC1_VAL) := insert(SRC1_VAL)
     output(DEST) := input(INST)(DEST.range)
   }
   def decodeActionWith_RD_RS1_RS2(opcode:InstructionOPCode.C): Unit ={
     import cpu.ID._
 
     decodeActionWith_RD_RS1(opcode)
-    insert(SRC2) :=  input(INST)(SRC2.range)
-    output(SRC2_VAL) := Mux(cpu.EX.input(DEST)===insert(SRC2),
-      whenTrue=cpu.EX.insert(REG_OUT),
-      whenFalse=cpu.regfile.read(insert(SRC2).asUInt)
-    )
+//    insert(SRC2) :=  input(INST)(SRC2.range)
+//    output(SRC2_VAL) := Mux(cpu.EX.input(DEST)===insert(SRC2),
+//      whenTrue=cpu.EX.output(REG_OUT),
+//      whenFalse=cpu.regfile.read(insert(SRC2).asUInt)
+//    )
+    output(SRC2_VAL) := insert(SRC2_VAL)
 
   }
 
@@ -76,10 +79,15 @@ class CPUPlugin(cpu:CPU){
     // let 's use sign expand here
   }
 
-  def executeActionWriteRD(block_get_result:(Bits,Bits) => Bits)={
+  def executeActionWith_RD_2SRC(block_get_result:(Bits,Bits) => Bits)= {
     import cpu.EX._
-    insert(REG_OUT) := block_get_result(input(SRC1_VAL),input(SRC2_VAL))
-    cpu.regfile.write(input(DEST).asUInt,insert(REG_OUT))
+    output(REG_OUT) := block_get_result(input(SRC1_VAL),input(SRC2_VAL))
+    //executeActionWriteRD(insert(REG_OUT))
+  }
+  def executeActionWriteRD(rd_val:Bits)={
+    import cpu.EX._
+    cpu.regfile.write(input(DEST).asUInt,rd_val)
+    //insert(REG_OUT) := rd_val
   }
 }
 
@@ -88,21 +96,35 @@ class Shifter(cpu:CPU) extends CPUPlugin(cpu){
     inst=Instructions.SLL,
     opcode=InstructionOPCode.SLL,
     decode_action = decodeActionWith_RD_RS1_RS2(InstructionOPCode.SLL),
-    execute_action = executeActionWriteRD((src1,src2)=> src1 |<< src2.asUInt)
+    execute_action = executeActionWith_RD_2SRC((src1,src2)=> src1 |<< src2.asUInt)
   )
   val ADD = new InstBundle(
     inst=Instructions.ADD,
     opcode=InstructionOPCode.ADD,
     decode_action = decodeActionWith_RD_RS1_RS2(InstructionOPCode.ADD),
-    execute_action = executeActionWriteRD((src1,src2)=> (src1.asUInt + src2.asUInt).asBits)
+    execute_action = executeActionWith_RD_2SRC((src1,src2)=> (src1.asUInt + src2.asUInt).asBits)
   )
   val ADDI = new InstBundle(
     inst=Instructions.ADDI,
     opcode=InstructionOPCode.ADDI,
     decode_action = decodeActionWith_RD_RS1_IMM12(InstructionOPCode.ADDI),
-    execute_action = executeActionWriteRD((src1,src2)=> (src1.asSInt + src2.asSInt).asBits)
+    execute_action = executeActionWith_RD_2SRC((src1,src2)=> (src1.asSInt + src2.asSInt).asBits)
   )
-  val insts=List(SLL,ADD,ADDI)
+
+  val JALR = new InstBundle(
+    inst=Instructions.JALR,
+    opcode=InstructionOPCode.JALR,
+    decode_action = decodeActionWith_RD_RS1_IMM12(InstructionOPCode.JALR),
+    execute_action = {
+
+      val target_address=cpu.EX.input(SRC1_VAL).asSInt + cpu.EX.input(SRC2_VAL).asSInt
+      cpu.PC.write((target_address.takeHigh(31) ## B("1'b0")).asUInt)
+      val link_address=(cpu.EX.input(PC_VAL).asUInt + 4)
+      executeActionWriteRD(link_address.asBits)
+      //cpu.EX.insert(REG_OUT) := link_address.asBits
+    }
+  )
+  val insts=List(SLL,ADD,ADDI,JALR)
 
   def build(cpu:CPU): Unit ={
     for(i<- insts){

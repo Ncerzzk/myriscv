@@ -7,7 +7,8 @@ import scala.collection.mutable.{ListBuffer,HashMap}
 class RegFile extends Area{
   val regs=Mem(Bits(Config.XLEN),32).init(Array.fill(32)(B(0)))
   def read(reg_addr:UInt)=regs.readAsync(reg_addr,writeFirst)
-  def write(reg_addr:UInt,data:Bits)=regs.write(reg_addr,data)
+  def write(reg_addr:UInt,data:Bits,condition:Bool=null)=regs.write(reg_addr,data,condition)
+
 
   def init(initData:Seq[Int]):Unit={
     assert (initData.length < 32, "error")
@@ -26,6 +27,7 @@ class CPU extends Component{
   val PC = new Area{
     val reg = Reg(UInt(Config.XLEN)).init(U(0))
     def read=reg
+    def write(target:UInt)= reg:=target
 
     reg := reg+4
   }
@@ -34,14 +36,16 @@ class CPU extends Component{
 
   val IF = new Stage{
     input(INST) := io.rom_interface.data
+    output(PC_VAL,false) := PC.read.asBits
   }
+  val EX = new Stage
   val ID = new Stage{
     val careList = HashMap[BigInt,ListBuffer[InstBundle]]()
     def addDecode(inst_bundle:InstBundle)={
       careList.getOrElseUpdate(inst_bundle.careAbout,ListBuffer[InstBundle]()) += inst_bundle
     }
-
     override def build(): Unit = {
+      bypassBuild()
       for(i <- careList){
         val care_bits = input(INST)&i._1
         for(j <- i._2){
@@ -52,17 +56,45 @@ class CPU extends Component{
       }
       super.build()
     }
-  }
-  val EX = new Stage
-  val WB = new Stage
 
-  IF >> ID >> EX >>WB
+    def addBypass(stage:Stage)={
+      when(insert(SRC1) === stage.input(DEST)){
+        insert(SRC1_VAL) := stage.output(REG_OUT,false)
+      }
+      when(insert(SRC2) === stage.input(DEST)){
+        insert(SRC2_VAL) := stage.output(REG_OUT,false)
+      }
+    }
+
+    def bypassBuild(): Unit ={
+      this.plug(new Area{
+        insert(SRC1,false) :=  input(INST)(SRC1.range)
+        insert(SRC2,false) :=  input(INST)(SRC2.range)
+        insert(SRC1_VAL,false) := regfile.read(insert(SRC1).asUInt)
+        insert(SRC2_VAL,false) := regfile.read(insert(SRC2).asUInt)
+        addBypass(EX)
+        addBypass(LD)
+        addBypass(WB)
+      })
+    }
+  }
+
+  val LD = new Stage
+  val WB = new Stage{
+    regfile.write(input(DEST).asUInt,input(REG_OUT),input(DEST)=/=B(0))
+  }
+  val stageList=List(IF,ID,EX,LD,WB)
+
+  IF >> ID >> EX >> LD>> WB
 
   val a=new Shifter(this)
   a.build(this)
 
   // the call order of .build() matters.
-  ID.build()
-  IF.build()
-
+  for(i<- stageList){
+    i.build()
+  }
+  for(i<- stageList){
+    i.inferConnections()
+  }
 }

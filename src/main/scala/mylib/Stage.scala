@@ -1,10 +1,11 @@
 package mylib
 
 import spinal.core._
+
 import scala.collection.mutable.{HashMap, ListBuffer}
 
 
-class Stageble[T <: Data](_dataType : => T) extends HardType[T](_dataType) {
+class Stageble[T <: Data](_dataType : => T) extends HardType[T](_dataType){
   def name=this.getClass.getSimpleName.replace("$","")
 
   def defaultVal={
@@ -32,7 +33,7 @@ object IMM12 extends Stageble(Bits(12 bits)){
   def range = 31 downto 20
 }
 object REG_OUT extends Stageble(Bits(Config.XLEN))
-
+object PC_VAL extends Stageble(Bits(Config.XLEN))
 object INST extends Stageble(Bits(32 bits))
 object OPCODE extends Stageble(Bits(6 bits))
 
@@ -64,24 +65,29 @@ class Stage extends Area{
     ret                                   // return the value returned by that
   }
 
-  def input[T <: Data](key:Stageble[T]):T={
+  def input[T <: Data](key:Stageble[T],default_init:Boolean=false):T={
     Inputs.getOrElseUpdate(key.asInstanceOf[Stageble[Data]],outsideCondScope{
       val input = key()
       //input:=key.defaultVal // we should connect the input to some signals in other places
       // we should set default value, or we will get a latch error
-      input.setPartialName(this, key.name)
+      if(default_init){
+        input := key.defaultVal
+      }
+      input.setPartialName(this, "input_"+key.name)
     }).asInstanceOf[T]
   }
 
-  def insert[T <: Data](key:Stageble[T]):T={
+  def insert[T <: Data](key:Stageble[T],default_init:Boolean=true):T={
     Inserts.getOrElseUpdate(key.asInstanceOf[Stageble[Data]],outsideCondScope{
       val insert = key()
-      insert := key.defaultVal
-      insert.setPartialName(this, key.name)
+      if(default_init){
+        insert := key.defaultVal
+      }
+      insert.setPartialName(this, "INSERT_"+key.name)
     }).asInstanceOf[T]
   }
 
-  def output[T <: Data](key : Stageble[T]) : T = {
+  def output[T <: Data](key : Stageble[T],default_init:Boolean=true) : T = {
     Outputs.getOrElseUpdate(key.asInstanceOf[Stageble[Data]],outsideCondScope{
       /* use outsideCondScope to place the init logic outside of current scope.
       if the signal defined in current scope, then it could only see the vals inside current scope.
@@ -97,10 +103,12 @@ class Stage extends Area{
       } */
 
       val output = key()
-      output:=key.defaultVal
+      if(default_init){
+        output:=key.defaultVal
+      }
       // we should set default value, or we will get a latch error
 
-      output.setPartialName(this, key.name)
+      output.setPartialName(this, "output_"+key.name)
     }).asInstanceOf[T]
   }
 
@@ -112,6 +120,7 @@ class Stage extends Area{
 
   def >>(that:Stage)={
     NextStages += that
+    that.LastStages += this
     that
     /*
     for ((key,signal) <- Outputs){
@@ -121,26 +130,63 @@ class Stage extends Area{
      */
   }
 
+  def searchBackForSignal(key : Stageble[Data]): Data ={
+    println(this.name + " search for "+ key.name)
+    for(upstream <- LastStages){
+      val output_reg=upstream.OutputRegs.getOrElse(key,null)
+      if(output_reg!=null){
+        println("find in output_reg")
+        return output_reg
+      }
+
+      val input = upstream.Inputs.getOrElse(key,null)
+      if(input!=null){
+        println("find in input")
+        val new_reg= RegNext(input).init(B(0))
+        upstream.OutputRegs += key -> new_reg
+        return new_reg
+      }
+
+      val uper_stream_signal=upstream.searchBackForSignal(key)
+      if(uper_stream_signal != null){
+        val new_reg=RegNext(uper_stream_signal).init(B(0))
+        upstream.OutputRegs += key -> new_reg
+        return new_reg
+      }
+    }
+    null
+  }
+
   def build()={
+    println("start to build "+ this.name)
     for((key,signal)<-Outputs){
       OutputRegs += key->RegNext(signal).init(B(0))
     }
+  }
 
+  def inferConnections()={
+    for((key,signal) <- Outputs){
+      val input=Inputs.getOrElse(key,searchBackForSignal(key))
+      if(input != null){
+        signal := input
+      }
+    }
     for(stage <- NextStages){
       for( (key,signal) <- stage.Inputs){
         val reg=OutputRegs.getOrElse(key,null)
         if(reg != null){
           signal := reg
         }else{
-          // the stage(itself) didn't set the signal as output manually
-          // so the next stage couldn't find the signal in OutputRegs
-          val input_signal= Inputs.getOrElse(key,null)
-          if(input_signal!=null){
-            // if we find the signal in Inputs, let's directly connect it to OutputRegs
-            val new_reg = RegNext(input_signal).init(B(0))
-            OutputRegs += key->new_reg
-            signal := new_reg
-          }
+          /*          // the stage(itself) didn't set the signal as output manually
+                    // so the next stage couldn't find the signal in OutputRegs
+                    val input_signal= Inputs.getOrElse(key,null)
+                    if(input_signal!=null){
+                      // if we find the signal in Inputs, let's directly connect it to OutputRegs
+                      val new_reg = RegNext(input_signal).init(B(0))
+                      OutputRegs += key->new_reg
+                      signal := new_reg
+                    }*/
+          signal := stage.searchBackForSignal(key)
 
         }
       }

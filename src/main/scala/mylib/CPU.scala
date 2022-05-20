@@ -46,6 +46,7 @@ class CPU extends Component{
     }
     override def build(): Unit = {
       bypassBuild()
+
       for(i <- careList){
         val care_bits = input(INST)&i._1
         for(j <- i._2){
@@ -88,13 +89,15 @@ class CPU extends Component{
   IF >> ID >> EX >> LD>> WB
 
   val a=new Shifter(this)
-  a.build(this)
+  a.build()  // plugins build
 
-  // the call order of .build() matters.
-  for(i<- stageList){
+  for(i<- stageList){   // stages build
     i.build()
   }
-  for(i<- stageList){
+
+  for(i<- stageList){   
     i.inferConnections()
   }
+
+  a.finalBuild()
 }

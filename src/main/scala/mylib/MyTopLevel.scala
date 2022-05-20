@@ -91,7 +91,7 @@ class CPUPlugin(cpu:CPU){
   }
 }
 
-class Shifter(cpu:CPU) extends CPUPlugin(cpu){
+class Shifter(val cpu:CPU) extends CPUPlugin(cpu){
   val SLL = new InstBundle(
     inst=Instructions.SLL,
     opcode=InstructionOPCode.SLL,
@@ -126,7 +126,7 @@ class Shifter(cpu:CPU) extends CPUPlugin(cpu){
   )
   val insts=List(SLL,ADD,ADDI,JALR)
 
-  def build(cpu:CPU): Unit ={
+  def build(): Unit ={
     for(i<- insts){
       cpu.ID.addDecode(i)
 
@@ -138,6 +138,27 @@ class Shifter(cpu:CPU) extends CPUPlugin(cpu){
       })
     }
   }
+
+  def finalBuild():Unit={
+    // called after interconnection finished
+
+    // add stage regs flush support
+    cpu.ID.plug(
+      new Area{
+        when(cpu.EX.insert(FLUSH)){
+          cpu.ID.getOutputReg(OPCODE) := B(0)
+        }
+      }
+    )
+    cpu.IF.plug(
+      new Area{
+        when(cpu.EX.insert(FLUSH)){
+          cpu.IF.getOutputReg(INST) := B(0)
+        }
+      }
+    )
+  }
+
 }
 
 case class SOCInitData(rom_init_array:Seq[String],regfile_init_array:Seq[Int])

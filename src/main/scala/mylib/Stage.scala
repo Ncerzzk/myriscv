@@ -8,8 +8,12 @@ import scala.collection.mutable.{HashMap, ListBuffer}
 class Stageble[T <: Data](_dataType : => T) extends HardType[T](_dataType){
   def name=this.getClass.getSimpleName.replace("$","")
 
-  def defaultVal={
-    B(0).asInstanceOf[T]
+  def defaultVal:T={
+    _dataType match{
+      case _:Bool => False.asInstanceOf[T]
+      case _ => B(0).asInstanceOf[T]
+    }
+    //B(0).asInstanceOf[T]
   }
 }
 
@@ -36,7 +40,7 @@ object REG_OUT extends Stageble(Bits(Config.XLEN))
 object PC_VAL extends Stageble(Bits(Config.XLEN))
 object INST extends Stageble(Bits(32 bits))
 object OPCODE extends Stageble(Bits(6 bits))
-
+object FLUSH extends Stageble(Bool)
 
 class Stage extends Area{
   /*
@@ -65,51 +69,68 @@ class Stage extends Area{
     ret                                   // return the value returned by that
   }
 
-  def input[T <: Data](key:Stageble[T],default_init:Boolean=false):T={
-    Inputs.getOrElseUpdate(key.asInstanceOf[Stageble[Data]],outsideCondScope{
-      val input = key()
-      //input:=key.defaultVal // we should connect the input to some signals in other places
-      // we should set default value, or we will get a latch error
-      if(default_init){
-        input := key.defaultVal
+  def getSignalAndInit[T <: Data](hash: HashMap[Stageble[Data], Data],key:Stageble[T],init:Boolean,prefix:String): T ={
+    hash.getOrElseUpdate(key.asInstanceOf[Stageble[Data]],outsideCondScope{
+      val signal = key()
+      if(init){
+        signal := key.defaultVal
       }
-      input.setPartialName(this, "input_"+key.name)
+      signal.setPartialName(this,prefix+"_"+key.name)
     }).asInstanceOf[T]
+  }
+
+  def input[T <: Data](key:Stageble[T],default_init:Boolean=false):T={
+//    Inputs.getOrElseUpdate(key.asInstanceOf[Stageble[Data]],outsideCondScope{
+//      val input = key()
+//      //input:=key.defaultVal // we should connect the input to some signals in other places
+//      // we should set default value, or we will get a latch error
+//      if(default_init){
+//        input := key.defaultVal
+//      }
+//      input.setPartialName(this, "input_"+key.name)
+//    }).asInstanceOf[T]
+    getSignalAndInit(Inputs,key,default_init,"input")
   }
 
   def insert[T <: Data](key:Stageble[T],default_init:Boolean=true):T={
-    Inserts.getOrElseUpdate(key.asInstanceOf[Stageble[Data]],outsideCondScope{
-      val insert = key()
-      if(default_init){
-        insert := key.defaultVal
-      }
-      insert.setPartialName(this, "INSERT_"+key.name)
-    }).asInstanceOf[T]
+//    Inserts.getOrElseUpdate(key.asInstanceOf[Stageble[Data]],outsideCondScope{
+//      val insert = key()
+//      if(default_init){
+//        insert := key.defaultVal
+//      }
+//      insert.setPartialName(this, "INSERT_"+key.name)
+//    }).asInstanceOf[T]
+    getSignalAndInit(Inserts,key,default_init,"insert")
   }
 
   def output[T <: Data](key : Stageble[T],default_init:Boolean=true) : T = {
-    Outputs.getOrElseUpdate(key.asInstanceOf[Stageble[Data]],outsideCondScope{
-      /* use outsideCondScope to place the init logic outside of current scope.
-      if the signal defined in current scope, then it could only see the vals inside current scope.
-      for example:
-      when( some_condition  ){
-        output(TEST) := True
-        io.test1 := True
-      }
-      if we don't use outsideCondScope, then we will get:
-      TEST := True
-      if(some_condition){
-        io.test1 = 1'b1;
-      } */
+//    Outputs.getOrElseUpdate(key.asInstanceOf[Stageble[Data]],outsideCondScope{
+//      /* use outsideCondScope to place the init logic outside of current scope.
+//      if the signal defined in current scope, then it could only see the vals inside current scope.
+//      for example:
+//      when( some_condition  ){
+//        output(TEST) := True
+//        io.test1 := True
+//      }
+//      if we don't use outsideCondScope, then we will get:
+//      TEST := True
+//      if(some_condition){
+//        io.test1 = 1'b1;
+//      } */
+//
+//      val output = key()
+//      if(default_init){
+//        output:=key.defaultVal
+//      }
+//      // we should set default value, or we will get a latch error
+//
+//      output.setPartialName(this, "output_"+key.name)
+//    }).asInstanceOf[T]
+    getSignalAndInit(Outputs,key,default_init,"output")
+  }
 
-      val output = key()
-      if(default_init){
-        output:=key.defaultVal
-      }
-      // we should set default value, or we will get a latch error
-
-      output.setPartialName(this, "output_"+key.name)
-    }).asInstanceOf[T]
+  def getOutputReg[T <: Data](key : Stageble[T]): T ={
+    OutputRegs.getOrElse(key.asInstanceOf[Stageble[Data]],null).asInstanceOf[T]
   }
 
   def addPipelineOutputSignal[T<: Data](signals:(Stageble[T],Data)*): Unit ={

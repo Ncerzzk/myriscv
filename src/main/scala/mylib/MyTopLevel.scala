@@ -86,7 +86,7 @@ class CPUPlugin(cpu:CPU){
   }
   def executeActionWriteRD(rd_val:Bits)={
     import cpu.EX._
-    cpu.regfile.write(input(DEST).asUInt,rd_val)
+    //cpu.regfile.write(input(DEST).asUInt,rd_val)
     //insert(REG_OUT) := rd_val
   }
 }

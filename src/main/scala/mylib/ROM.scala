@@ -28,7 +28,7 @@ class ROM extends Component{
   val io = ROM.interfaceOfSelf
   val rom=Mem(Bits(32 bits),len).init(Array.fill(len)(B(0)))
 
-  io.data := rom.readSync(io.addr>>2)
+  io.data := rom.readSync(io.addr.takeHigh(io.addr.getBitsWidth -2).asUInt)
 
   def init(initData:Seq[String]):Unit={
     assert (initData.length < len, "error")

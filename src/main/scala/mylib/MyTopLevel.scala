@@ -56,7 +56,7 @@ class CPUPlugin(cpu:CPU){
 //      whenTrue=cpu.EX.output(REG_OUT),
 //      whenFalse=cpu.regfile.read(insert(SRC1).asUInt)
 //    )
-    output(SRC1_VAL) := insert(SRC1_VAL)
+    //output(SRC1_VAL) := insert(SRC1_VAL)
     output(DEST) := input(INST)(DEST.range)
   }
   def decodeActionWith_RD_RS1_RS2(opcode:InstructionOPCode.C): Unit ={
@@ -68,14 +68,14 @@ class CPUPlugin(cpu:CPU){
 //      whenTrue=cpu.EX.output(REG_OUT),
 //      whenFalse=cpu.regfile.read(insert(SRC2).asUInt)
 //    )
-    output(SRC2_VAL) := insert(SRC2_VAL)
+    //output(SRC2_VAL) := insert(SRC2_VAL)
 
   }
 
   def decodeActionWith_RD_RS1_IMM12(opcode:InstructionOPCode.C): Unit ={
     import cpu.ID._
     decodeActionWith_RD_RS1(opcode)
-    output(SRC2_VAL) := input(INST)(IMM12.range).asSInt.resize(SRC2_VAL.getBitsWidth).asBits
+    //output(SRC2_VAL) := input(INST)(IMM12.range).asSInt.resize(SRC2_VAL.getBitsWidth).asBits
     // let 's use sign expand here
   }
 
@@ -164,8 +164,15 @@ class Shifter(val cpu:CPU) extends CPUPlugin(cpu){
 case class SOCInitData(rom_init_array:Seq[String],regfile_init_array:Seq[Int])
 
 class SOC(init_data:SOCInitData=null) extends Component{
+  val io = new Bundle{
+    val test_cpu = out (Bool)
+    val test_rom = out (Bool)
+  }
   val rom = new ROM
   val cpu = new CPU
+
+  io.test_cpu := cpu.io.test
+  io.test_rom := rom.testio.io
 
   rom.io <> cpu.io.rom_interface
 

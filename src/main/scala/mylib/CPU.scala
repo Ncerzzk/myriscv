@@ -4,9 +4,10 @@ import spinal.core._
 
 import scala.collection.mutable.{ListBuffer,HashMap}
 
-class RegFile extends Area{
+class RegFile(val cpu:CPU) extends Area{
   val regs=Mem(Bits(Config.XLEN),32).init(Array.fill(32)(B(0)))
-  def read(reg_addr:UInt)=regs.readAsync(reg_addr,writeFirst)
+  //def read(reg_addr:UInt)=regs.readAsync(reg_addr,writeFirst)
+  def read(reg_addr:UInt)=regs.readSync(reg_addr,null)
   def write(reg_addr:UInt,data:Bits,condition:Bool=null)=regs.write(reg_addr,data,condition)
 
 
@@ -15,14 +16,55 @@ class RegFile extends Area{
     val empty_array = Array.fill(32-initData.length)(B(0))
     regs.init(initData.map(x=>B(x)).toList++empty_array)
   }
+
+
+
+  def build(): Unit ={
+    cpu.ID.plug(new Area{
+      import cpu.ID._
+      output(SRC1,false) :=  input(INST)(SRC1.range)
+      output(SRC2,false) :=  input(INST)(SRC2.range)
+    })
+
+    val src1RegOut=read(cpu.ID.output(SRC1).asUInt)
+    val src2RegOut=read(cpu.ID.output(SRC2).asUInt)
+
+    cpu.EX.plug(new Area{
+      switch(cpu.EX.input(SRC1)){
+        is(cpu.WB.input(DEST)){
+          cpu.EX.input(SRC1_VAL) := cpu.WB.output(REG_OUT,false)
+        }
+        is(cpu.LD.input(DEST)){
+          cpu.EX.input(SRC1_VAL) := cpu.LD.output(REG_OUT,false)
+        }
+        default{
+          cpu.EX.input(SRC1_VAL) := src1RegOut
+        }
+      }
+
+      switch(cpu.EX.input(SRC2)){
+        is(cpu.WB.input(DEST)){
+          cpu.EX.input(SRC2_VAL) := cpu.WB.output(REG_OUT,false)
+        }
+        is(cpu.LD.input(DEST)){
+          cpu.EX.input(SRC2_VAL) := cpu.LD.output(REG_OUT,false)
+        }
+        default{
+          cpu.EX.input(SRC2_VAL) := src2RegOut
+        }
+      }
+    })
+  }
 }
 
 class CPU extends Component{
 
   val io = new Bundle{
     val rom_interface=ROM.interfaceOfCPU
+    val test= out(True)
   }
-  val regfile=new RegFile
+
+  val regfile=new RegFile(this)
 
   val PC = new Area{
     val reg = Reg(UInt(Config.XLEN)).init(U(0))
@@ -45,7 +87,7 @@ class CPU extends Component{
       careList.getOrElseUpdate(inst_bundle.careAbout,ListBuffer[InstBundle]()) += inst_bundle
     }
     override def build(): Unit = {
-      bypassBuild()
+      //bypassBuild()
 
       for(i <- careList){
         val care_bits = input(INST)&i._1
@@ -73,6 +115,7 @@ class CPU extends Component{
         insert(SRC2,false) :=  input(INST)(SRC2.range)
         insert(SRC1_VAL,false) := regfile.read(insert(SRC1).asUInt)
         insert(SRC2_VAL,false) := regfile.read(insert(SRC2).asUInt)
+
         addBypass(EX)
         addBypass(LD)
         addBypass(WB)
@@ -91,11 +134,13 @@ class CPU extends Component{
   val a=new Shifter(this)
   a.build()  // plugins build
 
+  regfile.build()
+
   for(i<- stageList){   // stages build
     i.build()
   }
 
-  for(i<- stageList){   
+  for(i<- stageList){
     i.inferConnections()
   }
 

@@ -194,21 +194,9 @@ class Stage extends Area{
     }
     for(stage <- NextStages){
       for( (key,signal) <- stage.Inputs){
-        val reg=OutputRegs.getOrElse(key,null)
+        val reg=OutputRegs.getOrElse(key,stage.searchBackForSignal(key))
         if(reg != null){
           signal := reg
-        }else{
-          /*          // the stage(itself) didn't set the signal as output manually
-                    // so the next stage couldn't find the signal in OutputRegs
-                    val input_signal= Inputs.getOrElse(key,null)
-                    if(input_signal!=null){
-                      // if we find the signal in Inputs, let's directly connect it to OutputRegs
-                      val new_reg = RegNext(input_signal).init(B(0))
-                      OutputRegs += key->new_reg
-                      signal := new_reg
-                    }*/
-          signal := stage.searchBackForSignal(key)
-
         }
       }
     }

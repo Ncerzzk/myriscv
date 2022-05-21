@@ -24,6 +24,10 @@ class ROM extends Component{
   // size: bytes
   // len : size/4
 
+  val testio= new Bundle{
+    val io=out(True)
+  }
+
   val len = Config.ROM_Size/4
   val io = ROM.interfaceOfSelf
   val rom=Mem(Bits(32 bits),len).init(Array.fill(len)(B(0)))

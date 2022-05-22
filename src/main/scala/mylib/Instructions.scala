@@ -143,7 +143,7 @@ object CompileInstructions{
   def instsWithIMM12(inst:String)=inst+" rd,rs1,imm12"
 
   val instsWith2RSList=List("add","sll","sub","slt","sltu","xor","srl","sra","or","and")
-  val instsWithIMM12List=List("lb","lh","lw","lbu","lhu","addi","slti","sltiu","xori","ori","andi")
+  val instsWithIMM12List=List("lb","lh","lw","lbu","lhu","addi","slti","sltiu","xori","ori","andi","jalr")
 
   for (i <- instsWith2RSList){
     insts += i->instsWith2RS(i)

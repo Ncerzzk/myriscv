@@ -49,9 +49,11 @@ class CPU extends Component{
 
       for(i <- careList){
         val care_bits = input(INST)&i._1
-        for(j <- i._2){
-          when(care_bits === j.value){
-            j.decode
+        switch(care_bits){
+          for(j <- i._2){
+            is(j.value){
+              j.decode
+            }
           }
         }
       }

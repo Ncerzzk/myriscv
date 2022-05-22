@@ -87,6 +87,7 @@ class CPUPlugin(cpu:CPU){
   def executeActionWriteRD(rd_val:Bits)={
     import cpu.EX._
     //cpu.regfile.write(input(DEST).asUInt,rd_val)
+    output(REG_OUT) := rd_val
     //insert(REG_OUT) := rd_val
   }
 }
@@ -108,7 +109,7 @@ class Shifter(val cpu:CPU) extends CPUPlugin(cpu){
     inst=Instructions.ADDI,
     opcode=InstructionOPCode.ADDI,
     decode_action = decodeActionWith_RD_RS1_IMM12(InstructionOPCode.ADDI),
-    execute_action = executeActionWith_RD_2SRC((src1,src2)=> (src1.asSInt + src2.asSInt).asBits)
+    execute_action = executeActionWith_RD_2SRC((src1,src2)=> (src1.asUInt + src2.asUInt).asBits)
   )
 
   val JALR = new InstBundle(

@@ -122,6 +122,7 @@ class Shifter(val cpu:CPU) extends CPUPlugin(cpu){
       cpu.PC.write((target_address.takeHigh(31) ## B("1'b0")).asUInt)
       val link_address=(cpu.EX.input(PC_VAL).asUInt + 4)
       executeActionWriteRD(link_address.asBits)
+      cpu.EX.insert(FLUSH) := True
       //cpu.EX.insert(REG_OUT) := link_address.asBits
     }
   )

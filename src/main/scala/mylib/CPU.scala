@@ -26,7 +26,9 @@ class CPU extends Component{
 
   val PC = new Area{
     val reg = Reg(UInt(Config.XLEN)).init(U(0))
+    val last_reg = RegNext(reg)
     def read=reg
+    def last = last_reg
     def write(target:UInt)= reg:=target
 
     reg := reg+4
@@ -36,7 +38,7 @@ class CPU extends Component{
 
   val IF = new Stage{
     input(INST) := io.rom_interface.data
-    output(PC_VAL,false) := PC.read.asBits
+    output(PC_VAL,false) := PC.last.asBits
   }
   val EX = new Stage
   val ID = new Stage{

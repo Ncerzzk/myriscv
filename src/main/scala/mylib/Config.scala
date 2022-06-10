@@ -11,4 +11,5 @@ object Config{
   val core=CoreConfig
   val XLEN=32 bits
   val ROM_Size=512  // bytes
+  val RAM_Size=512
 }

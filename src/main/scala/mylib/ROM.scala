@@ -20,6 +20,47 @@ object ROM{
   def interfaceOfCPU=slave(interface)
 }
 
+object TCM{
+  def interface(size:Int, write:Boolean)=new Bundle with IMasterSlave{
+    val addr = UInt(log2Up(size) bits)
+    val rddata = Bits(Config.XLEN)
+    var wddata:Bits=null
+    var write_en:Bool=null
+    if(write){
+      wddata=Bits(Config.XLEN).setPartialName("wddata")
+      write_en=Bool().setPartialName("write_en")
+    }
+
+
+    override def asMaster(): Unit = {
+      addr.asInput()
+      rddata.asOutput()
+      if(write){
+        wddata.asInput()
+        write_en.asInput()
+      }
+
+    }
+
+  }
+
+  def interfaceOfSelf(size:Int,write:Boolean)=master(interface(size,write))
+  def interfaceOfCPU(size:Int,write:Boolean)=slave(interface(size,write))
+}
+class TCM(val size:Int,write:Boolean) extends Component{
+  val len = size / 4
+  val io = TCM.interfaceOfSelf(size,write)
+  val mem= Mem(Bits(32 bits),len).init(Array.fill(len)(B(0)))
+
+  val index=io.addr.takeHigh(io.addr.getBitsWidth -2).asUInt
+  if(write){
+    io.rddata := mem.readWriteSync(index,io.wddata,True,io.write_en)
+  }else{
+    io.rddata := mem.readSync(index)
+  }
+
+}
+
 class ROM extends Component{
   // size: bytes
   // len : size/4

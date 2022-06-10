@@ -21,6 +21,7 @@ class CPU extends Component{
 
   val io = new Bundle{
     val rom_interface=ROM.interfaceOfCPU
+    val ram_interface=TCM.interfaceOfCPU(Config.RAM_Size,true)
   }
   val regfile=new RegFile
 

@@ -168,8 +168,10 @@ case class SOCInitData(rom_init_array:Seq[String],regfile_init_array:Seq[Int])
 class SOC(init_data:SOCInitData=null) extends Component{
   val rom = new ROM
   val cpu = new CPU
+  val ram = new TCM(Config.RAM_Size,true)
 
   rom.io <> cpu.io.rom_interface
+  ram.io <> cpu.io.ram_interface
 
   //rom.init(List("sll x3,x2,x1","add x2,x1,x0","sll x3,x2,x1"))
   if (init_data!=null){
